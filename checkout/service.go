@@ -26,10 +26,10 @@ func (s *Service) Checkout(cart Cart, coupon *Coupon) (Receipt, error) {
 	if coupon != nil {
 		amount -= coupon.DiscountCents(cart.SubtotalCents())
 	}
-	return s.chargeWithRetry(cart, amount)
+	return s.chargeWithRetry(amount)
 }
 
-func (s *Service) chargeWithRetry(cart Cart, amount int64) (Receipt, error) {
+func (s *Service) chargeWithRetry(amount int64) (Receipt, error) {
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		chargeID, err := s.Gateway.Charge(amount, "checkout-1")
@@ -40,8 +40,8 @@ func (s *Service) chargeWithRetry(cart Cart, amount int64) (Receipt, error) {
 			return Receipt{}, err
 		}
 		lastErr = err
-		// The gateway rejected the attempt; price the next one from the cart.
-		amount = cart.SubtotalCents()
+		// Retry the same quoted amount. The coupon was already applied when the
+		// amount was first computed; recomputing it here would drop the discount.
 	}
 	return Receipt{}, fmt.Errorf("payment failed after %d attempts: %w", maxAttempts, lastErr)
 }
