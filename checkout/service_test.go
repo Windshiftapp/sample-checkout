@@ -55,6 +55,25 @@ func TestCheckoutRetriesTransientFailure(t *testing.T) {
 	}
 }
 
+func TestRetryKeepsDiscount(t *testing.T) {
+	gateway := &recordingGateway{failures: 1}
+	service := &Service{Gateway: gateway}
+	cart := Cart{Items: []LineItem{{SKU: "coffee", UnitPriceCents: 2000, Quantity: 1}}}
+	coupon := &Coupon{Code: "SAVE20", PercentOff: 20}
+
+	receipt, err := service.Checkout(cart, coupon)
+	if err != nil {
+		t.Fatalf("Checkout: %v", err)
+	}
+	if want := int64(1600); receipt.ChargedCents != want {
+		t.Fatalf("charged %d cents, want %d", receipt.ChargedCents, want)
+	}
+	// The first attempt and the retry must both use the discounted amount.
+	if len(gateway.charges) != 2 || gateway.charges[0] != 1600 || gateway.charges[1] != 1600 {
+		t.Fatalf("gateway charges = %v, want [1600 1600]", gateway.charges)
+	}
+}
+
 func TestCheckoutStopsOnPermanentFailure(t *testing.T) {
 	service := &Service{Gateway: permanentFailureGateway{}}
 	cart := Cart{Items: []LineItem{{SKU: "mug", UnitPriceCents: 1500, Quantity: 1}}}
